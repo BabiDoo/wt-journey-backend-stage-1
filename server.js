@@ -1,10 +1,9 @@
 const express = require('express');
 const path = require('path');
-const mostraProdutos = require('./mostra-produtos');
 const fs = require('fs').promises; //para ler os arquivos
 const app = express();
 const PORT = 3000;
-const data = []; //Array para guardar todas as submissoes
+const contatos = []; //Array para guardar todas as submissoes
 app.use(express.static(path.join(__dirname, 'public'))); //para servir arquivos estaticos da pasta public
 app.use(express.urlencoded({ extended: true })); //para os formularios
 app.use(express.json()); //para aceitar tbm em formato json
@@ -12,13 +11,12 @@ app.use(express.json()); //para aceitar tbm em formato json
 
 app.get('/', async (req, res) => {
   try {
-    res.sendFile(path.join(__dirname, 'views', 'index.html'));
+    res.status(200).sendFile(path.join(__dirname, 'views', 'index.html'));
   } catch (error) {
     console.error(`Ops... ${error}`);
     res.status(500).send('Erro interno ao carregar a página');
   }
 });
-
 
 app.all('/', (req, res) => {
   res.status(405).send('Forbidden');
@@ -26,9 +24,7 @@ app.all('/', (req, res) => {
 
 app.get('/api/lanches', async (req, res) => {
   try {
-    const dados = await fs.readFile(path.join(__dirname, 'public', 'data', 'lanches.json'), 'utf8');
-    const lanches = JSON.parse(dados);
-    const produtos = mostraProdutos(lanches);
+    const lanches = JSON.parse(await fs.readFile(path.join(__dirname, 'public', 'data', 'lanches.json'), 'utf8'));
     res.status(200).json(lanches);
   } catch (err) {
     console.error('Erro ao ler lanches.json:', err);
@@ -46,8 +42,9 @@ app.get('/sugestao', async (req, res) => {
   let ingredientes = req.query.ingredientes || [];
   if (!Array.isArray(ingredientes)) ingredientes = [ingredientes];
   const listaLi = ingredientes.map(i => `<li>${i}</li>`).join('');
-  let html = await fs.readFile(path.join(__dirname, 'views', 'sugestao.html'),'utf8');
-  html = html.replace(/{{nome}}/g, nome).replace('{{ingredientes}}', listaLi);
+  let html = ((await fs.readFile(path.join(__dirname, 'views', 'sugestao.html'),'utf8'))
+  .replace(/{{ingredientes}}/g, listaLi))
+  .replace(/{{nome}}/g, nome);
   res
     .status(200)
     .send(html);
@@ -55,7 +52,6 @@ app.get('/sugestao', async (req, res) => {
   console.log(`Ops... ${error}`);
 }}
 );
-
 
 app.all('/sugestao', (req, res) => {
   res.status(405).send('Forbidden');
@@ -72,15 +68,12 @@ app.get('/contato', (req, res) => {
 
 app.post('/contato', async (req, res) => {
   const { nome, assunto, email, mensagem } = req.body;
-  data.push({ nome, assunto, email, mensagem });
+  contatos.push({ nome, assunto, email, mensagem });
   try {
-    let html = await fs.readFile(
+    let html = (await fs.readFile(
       path.join(__dirname, 'views', 'confirmation.html'),
       'utf8'
-    );
-
-    html = html
-      .replace(/{{nome}}/g, nome)
+    )).replace(/{{nome}}/g, nome)
       .replace(/{{email}}/g, email)
       .replace(/{{assunto}}/g, assunto)
       .replace(/{{mensagem}}/g, mensagem);
@@ -99,8 +92,13 @@ app.all('/contato', (req, res) => {
 });
 
 app.get('/api/contato', (req, res) => {
-  res.json(data);
+  res.json(contatos);
 });
+
+app.all('api/contato', (req, res) => {
+  res.status(405).send('Forbidden');
+}
+)
 
 app.use((req, res) =>{
   res.status(404).redirect('https://http.dog/404.jpg');
